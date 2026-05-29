@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build_apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: stable
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Build APK
+        run: flutter build apk --release --split-per-abi
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-artifacts
+          path: build/app/outputs/flutter-apk/*.apk
+
+  build_ipa:
+    name: Build IPA
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: stable
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Build iOS app
+        run: flutter build ios --release --no-codesign
+      - name: Zip Runner.app
+        run: |
+          cd build/ios/iphoneos
+          zip -r Runner.app.zip Runner.app
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-artifact
+          path: build/ios/iphoneos/Runner.app.zip
+
+  create_release:
+    name: Create GitHub Release
+    needs: [build_apk, build_ipa]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: apk-artifacts
+          path: artifacts/apk
+      - name: Download IPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ipa-artifact
+          path: artifacts/ipa
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/apk/*.apk
+            artifacts/ipa/Runner.app.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

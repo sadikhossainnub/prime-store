@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "498066216893",
+    "project_id": "amerdokan-a7372",
+    "storage_bucket": "amerdokan-a7372.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:498066216893:android:b75319eddc60da3d69e4d4",
+        "android_client_info": {
+          "package_name": "com.amerdokan.amer_dokan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYdi3D1Jq1E1_L2rHTzqwCI6dCehwihaM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
