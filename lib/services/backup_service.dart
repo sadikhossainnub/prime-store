@@ -383,6 +383,18 @@ class BackupService {
     return true;
   }
 
+  /// Restore database from any local .db file selected by user
+  static Future<bool> restoreFromLocalDbFile(File dbFile) async {
+    try {
+      if (!await dbFile.exists()) return false;
+      final dbPath = await _getDbPath();
+      await dbFile.copy(dbPath);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<String?> getLast3DayBackupTime() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_last3DayBackupKey);

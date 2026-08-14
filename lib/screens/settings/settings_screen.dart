@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -244,6 +245,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('ব্যাকআপ ব্যর্থ: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _restoreLocalDatabaseFile() async {
+    final verified = await AdminAuthService.verifyAdmin(context);
+    if (!verified || !mounted) return;
+
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+      final path = result.files.first.path;
+      if (path == null) return;
+
+      final file = File(path);
+      final success = await BackupService.restoreFromLocalDbFile(file);
+
+      if (!mounted) return;
+      if (success) {
+        context.read<DashboardProvider>().fetchStats();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ SQLite .db ফাইল থেকে রিস্টোর সম্পন্ন হয়েছে! অ্যাপটি রিস্টার্ট করুন।'),
+            backgroundColor: AppColors.primary,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('রিস্টোর করতে সমস্যা হয়েছে! বৈধ .db ফাইল সিলেক্ট করুন।'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('রিস্টোর ব্যর্থ: $e'), backgroundColor: AppColors.error),
         );
       }
     }
@@ -497,6 +542,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: const Text('সম্পূর্ণ ডেটাবেসের কপি ডাউনলোডস ফোল্ডারে সেভ হবে', style: TextStyle(fontSize: 12, color: Colors.white54)),
                     trailing: const Icon(Icons.admin_panel_settings, color: AppColors.primary, size: 20),
                     onTap: _exportLocalDatabaseBackup,
+                  ),
+                  const Divider(color: Colors.white12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.cyan.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.settings_backup_restore_rounded, color: Colors.cyan, size: 22),
+                    ),
+                    title: const Text('SQLite ডেটাবেস (.db) ফাইল রিস্টোর করুন'),
+                    subtitle: const Text('ফোন থেকে যেকোনো .db ব্যাকআপ ফাইল সিলেক্ট করে সরাসরি রিস্টোর করুন', style: TextStyle(fontSize: 12, color: Colors.white54)),
+                    trailing: const Icon(Icons.admin_panel_settings, color: AppColors.primary, size: 20),
+                    onTap: _restoreLocalDatabaseFile,
                   ),
                   const Divider(color: Colors.white12),
                   ListTile(
