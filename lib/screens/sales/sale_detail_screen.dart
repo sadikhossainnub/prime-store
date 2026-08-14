@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/sale.dart';
 import '../../providers/sales_provider.dart';
 import '../../providers/inventory_provider.dart';
+import '../../providers/customer_provider.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
@@ -163,7 +164,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('বিক্রয় মুছবেন?'),
-        content: const Text('এই বিক্রয় মুছলে স্টক পূর্বাবস্থায় ফিরবে।'),
+        content: const Text('এই বিক্রয় রিসাইকেল বিন-এ স্থানান্তর করা হবে এবং পণ্য স্টক ও বাকি এডজাস্ট হবে। এডমিন পরবর্তীতে তা পুনঃরুদ্ধার করতে পারবেন।'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -171,9 +172,12 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           ElevatedButton(
             onPressed: () async {
               await context.read<SalesProvider>().deleteSale(widget.sale.id!);
+              if (!ctx.mounted) return;
               await context.read<InventoryProvider>().fetchProducts();
               if (!ctx.mounted) return;
-              context.read<DashboardProvider>().fetchStats();
+              await context.read<CustomerProvider>().fetchCustomers();
+              if (!ctx.mounted) return;
+              await context.read<DashboardProvider>().fetchStats();
               Navigator.pop(ctx);
               Navigator.pop(context);
             },

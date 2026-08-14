@@ -278,7 +278,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('সরবরাহকারী মুছবেন?'),
-        content: Text('${supplier.name} মুছে ফেলা হবে।'),
+        content: Text('${supplier.name} রিসাইকেল বিন-এ স্থানান্তর করা হবে। এডমিন পরবর্তীতে তা পুনঃরুদ্ধার করতে পারবেন।'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),

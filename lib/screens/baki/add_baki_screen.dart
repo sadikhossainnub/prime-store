@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../providers/dashboard_provider.dart';
 import '../../providers/customer_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../models/customer.dart';
@@ -134,6 +135,7 @@ class _AddBakiScreenState extends State<AddBakiScreen> {
     );
     
     if (!mounted) return;
+    context.read<DashboardProvider>().fetchStats();
     Navigator.pop(context);
   }
 }

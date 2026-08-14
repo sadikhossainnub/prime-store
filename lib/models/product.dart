@@ -8,6 +8,7 @@ class Product {
   final double currentStock;
   final double minStockAlert;
   final String? barcode;
+  final String? photoPath;
   final DateTime createdAt;
 
   Product({
@@ -20,6 +21,7 @@ class Product {
     this.currentStock = 0,
     this.minStockAlert = 5,
     this.barcode,
+    this.photoPath,
     required this.createdAt,
   });
 
@@ -35,6 +37,7 @@ class Product {
         'current_stock': currentStock,
         'min_stock_alert': minStockAlert,
         'barcode': barcode,
+        'photo_path': photoPath,
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -48,6 +51,7 @@ class Product {
         currentStock: (map['current_stock'] as num).toDouble(),
         minStockAlert: (map['min_stock_alert'] as num).toDouble(),
         barcode: map['barcode'],
+        photoPath: map['photo_path'],
         createdAt: DateTime.parse(map['created_at']),
       );
 
@@ -61,6 +65,7 @@ class Product {
     double? currentStock,
     double? minStockAlert,
     String? barcode,
+    String? photoPath,
     DateTime? createdAt,
   }) =>
       Product(
@@ -73,6 +78,7 @@ class Product {
         currentStock: currentStock ?? this.currentStock,
         minStockAlert: minStockAlert ?? this.minStockAlert,
         barcode: barcode ?? this.barcode,
+        photoPath: photoPath ?? this.photoPath,
         createdAt: createdAt ?? this.createdAt,
       );
 }

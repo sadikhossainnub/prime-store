@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../../models/customer.dart';
 import '../../providers/customer_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import 'customer_detail_screen.dart';
@@ -118,6 +119,26 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               opacity: 0.05,
               child: Row(
                 children: [
+                  // Serial number
+                  Container(
+                    width: 28,
+                    height: 28,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${index + 1}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
                   _buildCustomerAvatar(customer),
                   const SizedBox(width: 16),
                   Expanded(
@@ -584,6 +605,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       );
     }
     if (!ctx.mounted) return;
+    ctx.read<DashboardProvider>().fetchStats();
     Navigator.pop(ctx);
   }
 
@@ -596,7 +618,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('কাস্টমার মুছবেন?'),
-        content: Text('${customer.name} এর সব তথ্য ও লেনদেন মুছে যাবে। এটি পূর্বাবস্থায় ফেরানো যাবে না।'),
+        content: Text('${customer.name} এর সব তথ্য ও লেনদেন রিসাইকেল বিন-এ স্থানান্তর করা হবে। এডমিন পরবর্তীতে তা পুনঃরুদ্ধার করতে পারবেন।'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('বাতিল', style: TextStyle(color: Colors.white54))),
           ElevatedButton(
@@ -604,6 +626,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               final provider = ctx.read<CustomerProvider>();
               await provider.deleteCustomer(customer.id!);
               if (!ctx.mounted) return;
+              ctx.read<DashboardProvider>().fetchStats();
               Navigator.pop(ctx);
               ScaffoldMessenger.of(ctx).showSnackBar(
                 SnackBar(content: Text('${customer.name} মুছে ফেলা হয়েছে'), backgroundColor: AppColors.error),

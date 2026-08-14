@@ -9,6 +9,8 @@ class AppColors {
   static const Color textPrimary = Colors.white;
   static const Color textSecondary = Colors.white70;
   static const Color error = Color(0xFFFF5252);
+  static const Color warning = Color(0xFFFF9800);
+  static const Color secondary = Color(0xFF2196F3);
   
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF00C853), Color(0xFF00E676)],

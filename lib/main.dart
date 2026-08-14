@@ -11,8 +11,10 @@ import 'providers/purchase_provider.dart';
 import 'providers/sales_provider.dart';
 import 'screens/main_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/activation_screen.dart';
 import 'services/backup_service.dart';
 import 'services/notification_service.dart';
+import 'services/license_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
@@ -24,16 +26,36 @@ void main() async {
 
   final prefs = await SharedPreferences.getInstance();
   final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
-  if (isLoggedIn) BackupService.autoBackupIfNeeded();
-  runApp(AmerDokanApp(isLoggedIn: isLoggedIn));
+  final licenseStatus = await LicenseService.checkLicense();
+  if (isLoggedIn) {
+    BackupService.autoBackupIfNeeded();
+    BackupService.autoLocalBackupEvery3Days();
+  }
+  runApp(AmerDokanApp(isLoggedIn: isLoggedIn, licenseStatus: licenseStatus));
 }
 
 class AmerDokanApp extends StatelessWidget {
   final bool isLoggedIn;
-  const AmerDokanApp({super.key, required this.isLoggedIn});
+  final LicenseStatus licenseStatus;
+  const AmerDokanApp({super.key, required this.isLoggedIn, required this.licenseStatus});
 
   @override
   Widget build(BuildContext context) {
+    // Show activation screen if license is not active
+    if (licenseStatus != LicenseStatus.active) {
+      return MaterialApp(
+        title: 'Amer Dokan',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        home: ActivationScreen(
+          onActivated: () {
+            // Restart the app flow after activation
+            runApp(AmerDokanApp(isLoggedIn: isLoggedIn, licenseStatus: LicenseStatus.active));
+          },
+        ),
+      );
+    }
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => CustomerProvider()),

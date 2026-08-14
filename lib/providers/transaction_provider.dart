@@ -48,4 +48,20 @@ class TransactionProvider with ChangeNotifier {
   Future<List<Payment>> getPayments(int customerId) async {
     return await DatabaseHelper.instance.getPaymentsByCustomer(customerId);
   }
+
+  Future<void> deleteTransaction(int id) async {
+    _isProcessing = true;
+    notifyListeners();
+    await DatabaseHelper.instance.deleteTransaction(id);
+    _isProcessing = false;
+    notifyListeners();
+  }
+
+  Future<void> deletePayment(int id) async {
+    _isProcessing = true;
+    notifyListeners();
+    await DatabaseHelper.instance.deletePayment(id);
+    _isProcessing = false;
+    notifyListeners();
+  }
 }

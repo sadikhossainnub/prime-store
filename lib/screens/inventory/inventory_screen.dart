@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/product.dart';
 import '../../providers/inventory_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import 'add_product_screen.dart';
@@ -151,18 +153,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
             child: Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 54,
+                  height: 54,
                   decoration: BoxDecoration(
                     color: product.isLowStock
                         ? AppColors.error.withValues(alpha: 0.15)
                         : AppColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    Icons.inventory_2_rounded,
-                    color: product.isLowStock ? AppColors.error : AppColors.primary,
-                  ),
+                  child: product.photoPath != null && File(product.photoPath!).existsSync()
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(product.photoPath!),
+                            fit: BoxFit.cover,
+                            width: 54,
+                            height: 54,
+                          ),
+                        )
+                      : Icon(
+                          Icons.inventory_2_rounded,
+                          color: product.isLowStock ? AppColors.error : AppColors.primary,
+                        ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -262,14 +274,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => AddProductScreen(product: product)),
-    ).then((_) => context.read<InventoryProvider>().fetchProducts());
+    ).then((_) {
+      if (!mounted) return;
+      context.read<InventoryProvider>().fetchProducts();
+      context.read<DashboardProvider>().fetchStats();
+    });
   }
 
   void _openStockAdjust(Product product) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => StockAdjustmentScreen(product: product)),
-    ).then((_) => context.read<InventoryProvider>().fetchProducts());
+    ).then((_) {
+      if (!mounted) return;
+      context.read<InventoryProvider>().fetchProducts();
+      context.read<DashboardProvider>().fetchStats();
+    });
   }
 
   void _confirmDelete(Product product) {
@@ -279,7 +299,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('পণ্য মুছবেন?'),
-        content: Text('${product.name} মুছে ফেলা হবে।'),
+        content: Text('${product.name} রিসাইকেল বিন-এ স্থানান্তর করা হবে। এডমিন পরবর্তীতে তা পুনঃরুদ্ধার করতে পারবেন।'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -288,6 +308,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             onPressed: () async {
               await context.read<InventoryProvider>().deleteProduct(product.id!);
               if (!ctx.mounted) return;
+              ctx.read<DashboardProvider>().fetchStats();
               Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),

@@ -252,11 +252,65 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     color: isBaki ? AppColors.error : AppColors.primary,
                   ),
                 ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                  onPressed: () => _confirmDeleteSingleTransaction(item),
+                ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  void _confirmDeleteSingleTransaction(dynamic item) {
+    final isBaki = item is BakiTransaction;
+    final title = isBaki ? 'বাকি লেনদেন মুছবেন?' : 'পেমেন্ট/আদায় মুছবেন?';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title),
+        content: Text(
+          'এই লেনদেনটি (৳${item.amount}) মুছে ফেলা হবে এবং রিসাইকেল বিন-এ স্থানান্তর করা হবে। কাস্টমারের মোট বাকি পুনঃহিসাব করা হবে।',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('বাতিল', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final txProvider = context.read<TransactionProvider>();
+              if (isBaki) {
+                if (item.id != null) {
+                  await txProvider.deleteTransaction(item.id!);
+                }
+              } else {
+                if (item.id != null) {
+                  await txProvider.deletePayment(item.id!);
+                }
+              }
+              if (!mounted) return;
+              await _fetchHistory();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('লেনদেনটি রিসাইকেল বিন-এ স্থানান্তর করা হয়েছে'),
+                    backgroundColor: AppColors.primary,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('মুছে ফেলুন'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -371,13 +425,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('কাস্টমার মুছবেন?'),
-        content: Text('${_currentCustomer.name} এর সব তথ্য মুছে যাবে।'),
+        content: Text('${_currentCustomer.name} এর সব তথ্য ও লেনদেন রিসাইকেল বিন-এ স্থানান্তর করা হবে। এডমিন পরবর্তীতে তা পুনঃরুদ্ধার করতে পারবেন।'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('বাতিল', style: TextStyle(color: Colors.white54))),
           ElevatedButton(
             onPressed: () async {
               await context.read<CustomerProvider>().deleteCustomer(_currentCustomer.id!);
               if (!ctx.mounted) return;
+              context.read<DashboardProvider>().fetchStats();
               Navigator.pop(ctx);
               Navigator.pop(context);
             },

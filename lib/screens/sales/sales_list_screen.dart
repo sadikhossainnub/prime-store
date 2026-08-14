@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/sales_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import 'add_sale_screen.dart';
@@ -37,7 +38,11 @@ class _SalesListScreenState extends State<SalesListScreen> {
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AddSaleScreen()),
-        ).then((_) => context.read<SalesProvider>().fetchSales()),
+        ).then((_) {
+          if (!context.mounted) return;
+          context.read<SalesProvider>().fetchSales();
+          context.read<DashboardProvider>().fetchStats();
+        }),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add),
         label: const Text('নতুন বিক্রয়'),
@@ -84,7 +89,11 @@ class _SalesListScreenState extends State<SalesListScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => SaleDetailScreen(sale: s)),
-            ).then((_) => context.read<SalesProvider>().fetchSales()),
+            ).then((_) {
+              if (!context.mounted) return;
+              context.read<SalesProvider>().fetchSales();
+              context.read<DashboardProvider>().fetchStats();
+            }),
             child: GlassCard(
               padding: const EdgeInsets.all(14),
               opacity: 0.05,

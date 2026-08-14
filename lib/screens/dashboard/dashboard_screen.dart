@@ -10,6 +10,8 @@ import '../baki/add_baki_screen.dart';
 import '../payment/add_payment_screen.dart';
 import '../sales/add_sale_screen.dart';
 import '../purchase/add_purchase_screen.dart';
+import '../settings/settings_screen.dart';
+import '../pos/pos_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -104,9 +106,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
-        CircleAvatar(
-          backgroundColor: AppColors.primary,
-          child: SvgPicture.asset('assets/images/logo.svg', width: 28, height: 28),
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.point_of_sale_rounded, color: AppColors.accent, size: 26),
+              tooltip: 'POS বিক্রয়',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PosScreen()),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings_rounded, color: Colors.white, size: 26),
+              tooltip: 'সেটিংস',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+            ),
+            const SizedBox(width: 4),
+            CircleAvatar(
+              backgroundColor: AppColors.primary,
+              child: SvgPicture.asset('assets/images/logo.svg', width: 28, height: 28),
+            ),
+          ],
         ),
       ],
     );
@@ -133,12 +160,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Icons.inventory_2_outlined,
           isCount: true,
         ),
+        _buildStatCard(
+          'সক্রিয় গ্রাহক',
+          stats.activeCustomers.toDouble(),
+          Colors.teal,
+          Icons.people_alt_rounded,
+          isCount: true,
+          suffix: 'জন',
+        ),
       ],
     );
   }
 
   Widget _buildStatCard(String title, double amount, Color color, IconData icon,
-      {bool isCount = false}) {
+      {bool isCount = false, String suffix = 'টি'}) {
     final format = NumberFormat.currency(symbol: '৳', decimalDigits: 0, locale: 'bn_BD');
     return GlassCard(
       padding: const EdgeInsets.all(12),
@@ -152,7 +187,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(title, style: const TextStyle(fontSize: 13, color: Colors.white70)),
           FittedBox(
             child: Text(
-              isCount ? '${amount.toInt()} টি' : format.format(amount),
+              isCount ? '${amount.toInt()} $suffix' : format.format(amount),
               style: TextStyle(
                   fontSize: 18, fontWeight: FontWeight.bold, color: color),
             ),
@@ -382,6 +417,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context, MaterialPageRoute(builder: (_) => const PosScreen()));
+                },
+                icon: const Icon(Icons.point_of_sale_rounded),
+                label: const Text('POS বিক্রয় (Point of Sale)',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
             ),
             const SizedBox(height: 8),
           ],

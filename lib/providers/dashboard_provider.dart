@@ -10,6 +10,7 @@ class DashboardProvider with ChangeNotifier {
   double _totalSales = 0.0;
   double _totalProfit = 0.0;
   double _lowStockCount = 0.0;
+  double _activeCustomers = 0.0;
   List<Map<String, dynamic>> _recentTransactions = [];
   List<Map<String, dynamic>> _topDefaulters = [];
   bool _isLoading = false;
@@ -22,6 +23,7 @@ class DashboardProvider with ChangeNotifier {
   double get totalSales => _totalSales;
   double get totalProfit => _totalProfit;
   int get lowStockCount => _lowStockCount.toInt();
+  int get activeCustomers => _activeCustomers.toInt();
   List<Map<String, dynamic>> get recentTransactions => _recentTransactions;
   List<Map<String, dynamic>> get topDefaulters => _topDefaulters;
   bool get isLoading => _isLoading;
@@ -39,6 +41,7 @@ class DashboardProvider with ChangeNotifier {
     _totalSales = stats['total_sales'] ?? 0.0;
     _totalProfit = stats['total_profit'] ?? 0.0;
     _lowStockCount = stats['low_stock_count'] ?? 0.0;
+    _activeCustomers = stats['active_customers'] ?? 0.0;
 
     _recentTransactions = await DatabaseHelper.instance.getRecentTransactions();
     _topDefaulters = await DatabaseHelper.instance.getTopDefaulters();

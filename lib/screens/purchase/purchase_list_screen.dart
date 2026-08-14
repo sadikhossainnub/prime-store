@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/purchase_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import 'add_purchase_screen.dart';
@@ -37,7 +38,11 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AddPurchaseScreen()),
-        ).then((_) => context.read<PurchaseProvider>().fetchPurchases()),
+        ).then((_) {
+          if (!context.mounted) return;
+          context.read<PurchaseProvider>().fetchPurchases();
+          context.read<DashboardProvider>().fetchStats();
+        }),
         backgroundColor: AppColors.accent,
         icon: const Icon(Icons.add),
         label: const Text('নতুন ক্রয়'),
@@ -73,7 +78,11 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => PurchaseDetailScreen(purchase: p)),
-            ),
+            ).then((_) {
+              if (!context.mounted) return;
+              context.read<PurchaseProvider>().fetchPurchases();
+              context.read<DashboardProvider>().fetchStats();
+            }),
             child: GlassCard(
               padding: const EdgeInsets.all(14),
               opacity: 0.05,

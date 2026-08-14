@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amer Dokan — License Key Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 520px;
+    }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    h1 span { color: #58a6ff; }
+    .subtitle { color: #8b949e; font-size: 13px; margin-bottom: 32px; }
+    label { font-size: 13px; color: #8b949e; display: block; margin-bottom: 6px; }
+    input, select {
+      width: 100%;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #e6edf3;
+      padding: 12px 14px;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+    }
+    input:focus, select:focus { border-color: #58a6ff; }
+    .field { margin-bottom: 20px; }
+    .row { display: flex; gap: 16px; }
+    .row .field { flex: 1; }
+    button {
+      width: 100%;
+      background: #238636;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #2ea043; }
+    .result { margin-top: 24px; }
+    .key-box {
+      background: #0d1117;
+      border: 1px solid #238636;
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+    }
+    .key-value {
+      font-family: 'Courier New', monospace;
+      font-size: 28px;
+      font-weight: bold;
+      color: #58a6ff;
+      letter-spacing: 4px;
+      word-break: break-all;
+    }
+    .key-meta {
+      font-size: 12px;
+      color: #8b949e;
+      margin-top: 10px;
+    }
+    .copy-btn {
+      margin-top: 14px;
+      background: #1f6feb;
+      padding: 10px;
+      font-size: 14px;
+    }
+    .copy-btn:hover { background: #388bfd; }
+    .divider { border-top: 1px solid #30363d; margin: 24px 0; }
+    .warning {
+      background: #3d1f00;
+      border: 1px solid #f78166;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #f78166;
+      margin-bottom: 24px;
+    }
+    .hidden { display: none; }
+    .tag {
+      display: inline-block;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 12px;
+      color: #8b949e;
+      margin-left: 6px;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>🔑 <span>Amer Dokan</span></h1>
+  <p class="subtitle">License Key Generator — শুধু ডেভেলপারের জন্য</p>
+
+  <div class="warning">
+    ⚠️ এই ফাইলটি গোপন রাখুন। কাউকে দেবেন না।
+  </div>
+
+  <div class="field">
+    <label>Customer-এর Device ID <span class="tag">App থেকে কপি করুন</span></label>
+    <input type="text" id="deviceId" placeholder="যেমন: A3F7B2C9E1D04856" maxlength="16"
+           oninput="this.value = this.value.toUpperCase().replace(/[^A-F0-9]/g,'')">
+  </div>
+
+  <div class="field">
+    <label>Customer-এর নাম</label>
+    <input type="text" id="customerName" placeholder="যেমন: Abdul Karim">
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label>মেয়াদের ধরন</label>
+      <select id="durationType" onchange="updateExpiry()">
+        <option value="30">১ মাস (৩০ দিন)</option>
+        <option value="90">৩ মাস</option>
+        <option value="180">৬ মাস</option>
+        <option value="365" selected>১ বছর</option>
+        <option value="730">২ বছর</option>
+        <option value="custom">নিজে লিখুন</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Expire তারিখ</label>
+      <input type="date" id="expiryDate">
+    </div>
+  </div>
+
+  <button onclick="generateKey()">🔑 Key Generate করুন</button>
+
+  <div class="result hidden" id="result">
+    <div class="divider"></div>
+    <div class="key-box">
+      <div class="key-value" id="generatedKey">—</div>
+      <div class="key-meta" id="keyMeta"></div>
+    </div>
+    <button class="copy-btn" onclick="copyKey()">📋 Key কপি করুন</button>
+  </div>
+</div>
+
+<script>
+  // ⚠️ SECRET KEY — must match license_service.dart exactly!
+  const SECRET = 'AmErDoKaN@2026#PrImE$sToRe!KeY';
+
+  // Initialize expiry date
+  function updateExpiry() {
+    const type = document.getElementById('durationType').value;
+    const today = new Date();
+    if (type === 'custom') return;
+    const days = parseInt(type);
+    const expiry = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
+    document.getElementById('expiryDate').value = expiry.toISOString().split('T')[0];
+  }
+  updateExpiry();
+
+  // HMAC-SHA256 using SubtleCrypto
+  async function hmacSha256(key, data) {
+    const enc = new TextEncoder();
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw', enc.encode(key),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false, ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(data));
+    return Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase();
+  }
+
+  function encodeExpiry(dateStr) {
+    const expiry = new Date(dateStr);
+    const epoch = new Date('2024-01-01');
+    const days = Math.floor((expiry - epoch) / (1000 * 60 * 60 * 24));
+    return days.toString(16).padStart(4, '0').toUpperCase();
+  }
+
+  async function generateKey() {
+    const deviceId = document.getElementById('deviceId').value.trim().toUpperCase();
+    const customerName = document.getElementById('customerName').value.trim();
+    const expiryDate = document.getElementById('expiryDate').value;
+
+    if (deviceId.length !== 16) {
+      alert('Device ID অবশ্যই ১৬ অক্ষরের হতে হবে।');
+      return;
+    }
+    if (!customerName) {
+      alert('Customer-এর নাম লিখুন।');
+      return;
+    }
+    if (!expiryDate) {
+      alert('Expire তারিখ বেছে নিন।');
+      return;
+    }
+    if (new Date(expiryDate) <= new Date()) {
+      alert('Expire তারিখ ভবিষ্যতে হতে হবে।');
+      return;
+    }
+
+    // Compute parts
+    const deviceHmac = await hmacSha256(SECRET, deviceId);
+    const devicePrefix = deviceHmac.substring(0, 4);
+
+    const expiryEncoded = encodeExpiry(expiryDate);
+
+    const custHmac = await hmacSha256(SECRET, customerName.toUpperCase());
+    const custHash = custHmac.substring(0, 4);
+
+    const payload = devicePrefix + expiryEncoded + custHash;
+    const hmac = await hmacSha256(SECRET, payload);
+    const hmacPart = hmac.substring(0, 4);
+
+    const raw = devicePrefix + expiryEncoded + custHash + hmacPart;
+    const key = raw.substring(0, 4) + '-' + raw.substring(4, 8) + '-' + raw.substring(8, 12) + '-' + raw.substring(12, 16);
+
+    document.getElementById('generatedKey').textContent = key;
+
+    const expDate = new Date(expiryDate);
+    const today = new Date();
+    const daysLeft = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+    document.getElementById('keyMeta').innerHTML =
+      `👤 ${customerName} &nbsp;|&nbsp; 📅 মেয়াদ: ${expiryDate} &nbsp;|&nbsp; ⏳ ${daysLeft} দিন`;
+
+    document.getElementById('result').classList.remove('hidden');
+
+    // Log to console for record
+    console.log(`Generated Key: ${key} | Customer: ${customerName} | Device: ${deviceId} | Expiry: ${expiryDate}`);
+  }
+
+  function copyKey() {
+    const key = document.getElementById('generatedKey').textContent;
+    navigator.clipboard.writeText(key).then(() => {
+      alert('Key কপি হয়েছে: ' + key);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 name: amer_dokan
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.2+3
 
 environment:
   sdk: ^3.11.1
@@ -28,6 +28,12 @@ dependencies:
   timezone: ^0.11.0
   flutter_contacts: ^2.0.2
   image_picker: ^1.2.2
+  mobile_scanner: ^7.0.0
+  crypto: ^3.0.6
+  google_mlkit_text_recognition: ^0.15.0
+  file_picker: ^8.0.0+1
+  csv: ^6.0.0
+  excel: ^4.0.6
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.3

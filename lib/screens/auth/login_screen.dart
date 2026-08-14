@@ -18,9 +18,19 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   void _login() async {
-    if (_userController.text.trim() == 'admin' && _passController.text == '123') {
+    final user = _userController.text.trim();
+    final pass = _passController.text;
+
+    if (user == 'prime-admin' && pass == '701865Say@') {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_logged_in', true);
+      await prefs.setBool('is_admin', true);
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/home');
+    } else if (user == 'admin' && pass == '123') {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_logged_in', true);
+      await prefs.setBool('is_admin', false);
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
     } else {

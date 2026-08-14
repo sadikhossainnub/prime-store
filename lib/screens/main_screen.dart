@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/dashboard_provider.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'customers/customer_list_screen.dart';
 import 'sales/sales_list_screen.dart';
 import 'inventory/inventory_screen.dart';
 import 'reports/reports_screen.dart';
 import 'settings/settings_screen.dart';
+import 'pos/pos_screen.dart';
+import 'settings/recycle_bin_screen.dart';
 import '../services/update_checker.dart';
+import '../services/admin_auth_service.dart';
 import '../theme/app_theme.dart';
 
 class MainScreen extends StatefulWidget {
@@ -50,7 +55,12 @@ class _MainScreenState extends State<MainScreen> {
         ),
         child: BottomNavigationBar(
           currentIndex: _selectedIndex,
-          onTap: (index) => setState(() => _selectedIndex = index),
+          onTap: (index) {
+            setState(() => _selectedIndex = index);
+            if (index == 0) {
+              context.read<DashboardProvider>().fetchStats();
+            }
+          },
           type: BottomNavigationBarType.fixed,
           items: const [
             BottomNavigationBarItem(
@@ -99,6 +109,27 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
             const Divider(color: Colors.white12),
+            ListTile(
+              leading: const Icon(Icons.point_of_sale_rounded, color: AppColors.accent),
+              title: const Text('POS বিক্রয় (Point of Sale)'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                    context, MaterialPageRoute(builder: (_) => const PosScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_sweep_rounded, color: AppColors.accent),
+              title: const Text('রিসাইকেল বিন (Admin)'),
+              onTap: () async {
+                Navigator.pop(context);
+                final verified = await AdminAuthService.verifyAdmin(context);
+                if (verified && mounted) {
+                  Navigator.push(
+                      context, MaterialPageRoute(builder: (_) => const RecycleBinScreen()));
+                }
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.settings_rounded, color: AppColors.primary),
               title: const Text('সেটিংস'),

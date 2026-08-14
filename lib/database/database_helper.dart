@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/customer.dart';
@@ -23,7 +24,7 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    return await openDatabase(path, version: 4, onCreate: _createDB, onUpgrade: _upgradeDB);
+    return await openDatabase(path, version: 6, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   Future _createDB(Database db, int version) async {
@@ -74,6 +75,7 @@ class DatabaseHelper {
         current_stock REAL NOT NULL DEFAULT 0,
         min_stock_alert REAL NOT NULL DEFAULT 5,
         barcode TEXT,
+        photo_path TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -233,6 +235,25 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE customers ADD COLUMN credit_limit REAL NOT NULL DEFAULT 0');
       } catch (_) {}
     }
+    if (oldVersion < 5) {
+      // Add photo_path column to products
+      try {
+        await db.execute('ALTER TABLE products ADD COLUMN photo_path TEXT');
+      } catch (_) {}
+    }
+    if (oldVersion < 6) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS recycle_bin (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          item_type TEXT NOT NULL,
+          item_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          subtitle TEXT,
+          data_json TEXT NOT NULL,
+          deleted_at TEXT NOT NULL
+        )
+      ''');
+    }
   }
 
   // ─── Customer Operations ─────────────────────────────────────────────
@@ -272,7 +293,30 @@ class DatabaseHelper {
 
   Future<int> deleteCustomer(int id) async {
     final db = await instance.database;
-    return await db.delete('customers', where: 'id = ?', whereArgs: [id]);
+    return await db.transaction((txn) async {
+      final custs = await txn.query('customers', where: 'id = ?', whereArgs: [id]);
+      if (custs.isNotEmpty) {
+        final cust = custs.first;
+        final txns = await txn.query('transactions', where: 'customer_id = ?', whereArgs: [id]);
+        final pymts = await txn.query('payments', where: 'customer_id = ?', whereArgs: [id]);
+        final data = {
+          'customer': cust,
+          'transactions': txns,
+          'payments': pymts,
+        };
+        await txn.insert('recycle_bin', {
+          'item_type': 'customer',
+          'item_id': id,
+          'title': cust['name'] ?? 'কাস্টমার #$id',
+          'subtitle': 'ফোন: ${cust['phone'] ?? 'N/A'}',
+          'data_json': jsonEncode(data),
+          'deleted_at': DateTime.now().toIso8601String(),
+        });
+      }
+      await txn.delete('transactions', where: 'customer_id = ?', whereArgs: [id]);
+      await txn.delete('payments', where: 'customer_id = ?', whereArgs: [id]);
+      return await txn.delete('customers', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   // ─── Transaction Operations ──────────────────────────────────────────
@@ -303,6 +347,44 @@ class DatabaseHelper {
     return result.map((json) => Payment.fromMap(json)).toList();
   }
 
+  Future<int> deleteTransaction(int id) async {
+    final db = await instance.database;
+    return await db.transaction((txn) async {
+      final txns = await txn.query('transactions', where: 'id = ?', whereArgs: [id]);
+      if (txns.isNotEmpty) {
+        final t = txns.first;
+        await txn.insert('recycle_bin', {
+          'item_type': 'transaction',
+          'item_id': id,
+          'title': 'বাকি লেনদেন #$id (৳${t['amount']})',
+          'subtitle': 'বিবরণ: ${t['description'] ?? 'N/A'}',
+          'data_json': jsonEncode(t),
+          'deleted_at': DateTime.now().toIso8601String(),
+        });
+      }
+      return await txn.delete('transactions', where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
+  Future<int> deletePayment(int id) async {
+    final db = await instance.database;
+    return await db.transaction((txn) async {
+      final pmts = await txn.query('payments', where: 'id = ?', whereArgs: [id]);
+      if (pmts.isNotEmpty) {
+        final p = pmts.first;
+        await txn.insert('recycle_bin', {
+          'item_type': 'payment',
+          'item_id': id,
+          'title': 'জমা পেমেন্ট #$id (৳${p['amount']})',
+          'subtitle': 'নোট: ${p['note'] ?? 'N/A'}',
+          'data_json': jsonEncode(p),
+          'deleted_at': DateTime.now().toIso8601String(),
+        });
+      }
+      return await txn.delete('payments', where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
   // ─── Product Operations ──────────────────────────────────────────────
 
   Future<int> createProduct(Product product) async {
@@ -330,7 +412,21 @@ class DatabaseHelper {
 
   Future<int> deleteProduct(int id) async {
     final db = await instance.database;
-    return await db.delete('products', where: 'id = ?', whereArgs: [id]);
+    return await db.transaction((txn) async {
+      final prods = await txn.query('products', where: 'id = ?', whereArgs: [id]);
+      if (prods.isNotEmpty) {
+        final prod = prods.first;
+        await txn.insert('recycle_bin', {
+          'item_type': 'product',
+          'item_id': id,
+          'title': prod['name'] ?? 'পণ্য #$id',
+          'subtitle': 'বিক্রয় মূল্য: ৳${prod['sell_price']}, স্টক: ${prod['current_stock']}',
+          'data_json': jsonEncode(prod),
+          'deleted_at': DateTime.now().toIso8601String(),
+        });
+      }
+      return await txn.delete('products', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   Future<void> adjustStock(int productId, double delta) async {
@@ -364,7 +460,21 @@ class DatabaseHelper {
 
   Future<int> deleteSupplier(int id) async {
     final db = await instance.database;
-    return await db.delete('suppliers', where: 'id = ?', whereArgs: [id]);
+    return await db.transaction((txn) async {
+      final sups = await txn.query('suppliers', where: 'id = ?', whereArgs: [id]);
+      if (sups.isNotEmpty) {
+        final sup = sups.first;
+        await txn.insert('recycle_bin', {
+          'item_type': 'supplier',
+          'item_id': id,
+          'title': sup['name'] ?? 'ডিলার #$id',
+          'subtitle': 'ফোন: ${sup['phone'] ?? 'N/A'}',
+          'data_json': jsonEncode(sup),
+          'deleted_at': DateTime.now().toIso8601String(),
+        });
+      }
+      return await txn.delete('suppliers', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   // ─── Purchase Operations ─────────────────────────────────────────────
@@ -423,13 +533,31 @@ class DatabaseHelper {
   Future<int> deletePurchase(int id) async {
     final db = await instance.database;
     return await db.transaction((txn) async {
-      // Reverse stock
-      final items = await txn.rawQuery(
-          'SELECT product_id, quantity FROM purchase_items WHERE purchase_id = ?', [id]);
-      for (final item in items) {
-        await txn.rawUpdate(
-            'UPDATE products SET current_stock = current_stock - ? WHERE id = ?',
-            [item['quantity'], item['product_id']]);
+      final purchases = await txn.query('purchases', where: 'id = ?', whereArgs: [id]);
+      if (purchases.isNotEmpty) {
+        final purchase = purchases.first;
+        final items = await txn.rawQuery(
+            'SELECT * FROM purchase_items WHERE purchase_id = ?', [id]);
+        final data = {
+          'purchase': purchase,
+          'items': items,
+        };
+        await txn.insert('recycle_bin', {
+          'item_type': 'purchase',
+          'item_id': id,
+          'title': 'ক্রয় (Invoice: ${purchase['invoice_no'] ?? id})',
+          'subtitle': 'মোট: ৳${purchase['total_amount']}, ডিলার: ${purchase['supplier_name'] ?? 'N/A'}',
+          'data_json': jsonEncode(data),
+          'deleted_at': DateTime.now().toIso8601String(),
+        });
+
+        // Reverse stock
+        for (final item in items) {
+          await txn.rawUpdate(
+              'UPDATE products SET current_stock = current_stock - ? WHERE id = ?',
+              [item['quantity'], item['product_id']]);
+        }
+        await txn.delete('purchase_items', where: 'purchase_id = ?', whereArgs: [id]);
       }
       return await txn.delete('purchases', where: 'id = ?', whereArgs: [id]);
     });
@@ -489,22 +617,75 @@ class DatabaseHelper {
   Future<int> deleteSale(int id) async {
     final db = await instance.database;
     return await db.transaction((txn) async {
-      // Reverse stock
-      final items = await txn.rawQuery(
-          'SELECT product_id, quantity FROM sale_items WHERE sale_id = ?', [id]);
-      for (final item in items) {
-        await txn.rawUpdate(
-            'UPDATE products SET current_stock = current_stock + ? WHERE id = ?',
-            [item['quantity'], item['product_id']]);
+      final sales = await txn.query('sales', where: 'id = ?', whereArgs: [id]);
+      if (sales.isNotEmpty) {
+        final sale = sales.first;
+        final invoiceNo = sale['invoice_no'];
+        final items = await txn.rawQuery(
+            'SELECT * FROM sale_items WHERE sale_id = ?', [id]);
+
+        List<Map<String, dynamic>> associatedTxns = [];
+        if (invoiceNo != null && invoiceNo.toString().isNotEmpty) {
+          associatedTxns = await txn.query('transactions',
+              where: 'description LIKE ?',
+              whereArgs: ['%Invoice: $invoiceNo%']);
+          await txn.delete('transactions',
+              where: 'description LIKE ?',
+              whereArgs: ['%Invoice: $invoiceNo%']);
+        }
+
+        final data = {
+          'sale': sale,
+          'items': items,
+          'transaction': associatedTxns.isNotEmpty ? associatedTxns.first : null,
+        };
+
+        await txn.insert('recycle_bin', {
+          'item_type': 'sale',
+          'item_id': id,
+          'title': 'বিক্রয় (Invoice: ${invoiceNo ?? id})',
+          'subtitle': 'মোট: ৳${sale['total_amount']}, কাস্টমার: ${sale['customer_name'] ?? 'নগদ'}',
+          'data_json': jsonEncode(data),
+          'deleted_at': DateTime.now().toIso8601String(),
+        });
+
+        // Reverse stock
+        for (final item in items) {
+          await txn.rawUpdate(
+              'UPDATE products SET current_stock = current_stock + ? WHERE id = ?',
+              [item['quantity'], item['product_id']]);
+        }
+        await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [id]);
       }
       return await txn.delete('sales', where: 'id = ?', whereArgs: [id]);
     });
+  }
+
+  Future<void> cleanupOrphanedSaleTransactions() async {
+    final db = await instance.database;
+    final txns = await db.query('transactions', where: "description LIKE '%Invoice:%'");
+    final sales = await db.query('sales', columns: ['id', 'invoice_no']);
+    final activeInvoices = sales.map((s) => s['invoice_no']?.toString()).whereType<String>().toSet();
+    final activeSaleIds = sales.map((s) => s['id']?.toString()).whereType<String>().toSet();
+
+    for (final txn in txns) {
+      final desc = txn['description']?.toString() ?? '';
+      final txnId = txn['id'];
+      final match = RegExp(r'Invoice:\s*([^\s\)]+)').firstMatch(desc);
+      if (match != null) {
+        final inv = match.group(1);
+        if (inv != null && !activeInvoices.contains(inv) && !activeSaleIds.contains(inv)) {
+          await db.delete('transactions', where: 'id = ?', whereArgs: [txnId]);
+        }
+      }
+    }
   }
 
   // ─── Dashboard Stats ─────────────────────────────────────────────────
 
   Future<Map<String, double>> getDashboardStats() async {
     final db = await instance.database;
+    await cleanupOrphanedSaleTransactions();
     final today = DateTime.now().toIso8601String().split('T')[0];
 
     final totalBakiResult =
@@ -525,6 +706,8 @@ class DatabaseHelper {
         await db.rawQuery('SELECT SUM(total_amount) as total FROM purchases');
     final lowStockResult = await db.rawQuery(
         'SELECT COUNT(*) as count FROM products WHERE current_stock <= min_stock_alert');
+    final activeCustomersResult = await db.rawQuery(
+        'SELECT COUNT(DISTINCT customer_id) as count FROM transactions');
 
     double totalBaki = (totalBakiResult.first['total'] as num?)?.toDouble() ?? 0.0;
     double totalPaid = (totalPaidResult.first['total'] as num?)?.toDouble() ?? 0.0;
@@ -540,6 +723,7 @@ class DatabaseHelper {
       'total_sales': totalSales,
       'total_profit': totalSales - totalPurchases,
       'low_stock_count': (lowStockResult.first['count'] as num?)?.toDouble() ?? 0.0,
+      'active_customers': (activeCustomersResult.first['count'] as num?)?.toDouble() ?? 0.0,
     };
   }
 
@@ -567,6 +751,7 @@ class DatabaseHelper {
         (COALESCE((SELECT SUM(amount) FROM transactions WHERE customer_id = c.id), 0) -
          COALESCE((SELECT SUM(amount) FROM payments WHERE customer_id = c.id), 0)) as total_baki
       FROM customers c
+      GROUP BY c.id
       HAVING total_baki > 0
       ORDER BY total_baki DESC
       LIMIT ?
@@ -615,6 +800,184 @@ class DatabaseHelper {
         COALESCE((SELECT SUM(amount) FROM payments WHERE customer_id = c.id), 0) as total_paid
       FROM customers c ORDER BY total_baki DESC
     ''');
+  }
+
+  // ─── Recycle Bin Operations ──────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getRecycleBinItems() async {
+    final db = await instance.database;
+    return await db.query('recycle_bin', orderBy: 'deleted_at DESC');
+  }
+
+  Future<int> deleteFromRecycleBin(int binId) async {
+    final db = await instance.database;
+    return await db.delete('recycle_bin', where: 'id = ?', whereArgs: [binId]);
+  }
+
+  Future<int> emptyRecycleBin() async {
+    final db = await instance.database;
+    return await db.delete('recycle_bin');
+  }
+
+  Future<bool> restoreFromRecycleBin(int binId) async {
+    final db = await instance.database;
+    return await db.transaction((txn) async {
+      final records = await txn.query('recycle_bin', where: 'id = ?', whereArgs: [binId]);
+      if (records.isEmpty) return false;
+      final rec = records.first;
+      final type = rec['item_type'] as String;
+      final data = jsonDecode(rec['data_json'] as String) as Map<String, dynamic>;
+
+      if (type == 'product') {
+        await txn.insert('products', data, conflictAlgorithm: ConflictAlgorithm.replace);
+      } else if (type == 'customer') {
+        final custData = Map<String, dynamic>.from(data['customer']);
+        await txn.insert('customers', custData, conflictAlgorithm: ConflictAlgorithm.replace);
+        if (data['transactions'] != null) {
+          for (final t in (data['transactions'] as List)) {
+            await txn.insert('transactions', Map<String, dynamic>.from(t), conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+        if (data['payments'] != null) {
+          for (final p in (data['payments'] as List)) {
+            await txn.insert('payments', Map<String, dynamic>.from(p), conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      } else if (type == 'supplier') {
+        await txn.insert('suppliers', data, conflictAlgorithm: ConflictAlgorithm.replace);
+      } else if (type == 'sale') {
+        final saleData = Map<String, dynamic>.from(data['sale']);
+        final saleId = await txn.insert('sales', saleData, conflictAlgorithm: ConflictAlgorithm.replace);
+        if (data['items'] != null) {
+          for (final i in (data['items'] as List)) {
+            final itemMap = Map<String, dynamic>.from(i);
+            itemMap['sale_id'] = saleId;
+            await txn.insert('sale_items', itemMap, conflictAlgorithm: ConflictAlgorithm.replace);
+            // Decrement stock back
+            await txn.rawUpdate(
+                'UPDATE products SET current_stock = current_stock - ? WHERE id = ?',
+                [itemMap['quantity'], itemMap['product_id']]);
+          }
+        }
+        if (data['transaction'] != null) {
+          await txn.insert('transactions', Map<String, dynamic>.from(data['transaction']), conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      } else if (type == 'purchase') {
+        final purchaseData = Map<String, dynamic>.from(data['purchase']);
+        final purchaseId = await txn.insert('purchases', purchaseData, conflictAlgorithm: ConflictAlgorithm.replace);
+        if (data['items'] != null) {
+          for (final i in (data['items'] as List)) {
+            final itemMap = Map<String, dynamic>.from(i);
+            itemMap['purchase_id'] = purchaseId;
+            await txn.insert('purchase_items', itemMap, conflictAlgorithm: ConflictAlgorithm.replace);
+            // Increment stock back
+            await txn.rawUpdate(
+                'UPDATE products SET current_stock = current_stock + ? WHERE id = ?',
+                [itemMap['quantity'], itemMap['product_id']]);
+          }
+        }
+      } else if (type == 'transaction') {
+        await txn.insert('transactions', data, conflictAlgorithm: ConflictAlgorithm.replace);
+      } else if (type == 'payment') {
+        await txn.insert('payments', data, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+
+      await txn.delete('recycle_bin', where: 'id = ?', whereArgs: [binId]);
+      return true;
+    });
+  }
+
+  // ─── Bulk Delete Operations (Admin) ──────────────────────────────────
+
+  /// Delete all products and related purchase_items/sale_items
+  Future<void> deleteAllProducts() async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      await txn.delete('sale_items');
+      await txn.delete('purchase_items');
+      await txn.delete('products');
+    });
+  }
+
+  /// Delete all customers and their transactions/payments
+  Future<void> deleteAllCustomers() async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      await txn.delete('transactions');
+      await txn.delete('payments');
+      await txn.delete('customers');
+    });
+  }
+
+  /// Delete all sales and sale_items
+  Future<void> deleteAllSales() async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      await txn.delete('sale_items');
+      await txn.delete('sales');
+    });
+  }
+
+  /// Delete all purchases and purchase_items
+  Future<void> deleteAllPurchases() async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      await txn.delete('purchase_items');
+      await txn.delete('purchases');
+    });
+  }
+
+  /// Delete all suppliers
+  Future<void> deleteAllSuppliers() async {
+    final db = await instance.database;
+    await db.delete('suppliers');
+  }
+
+  /// Delete all baki/transaction records and payments
+  Future<void> deleteAllTransactions() async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      await txn.delete('transactions');
+      await txn.delete('payments');
+    });
+  }
+
+  /// Delete ALL data from all tables (nuclear option)
+  Future<void> deleteAllData() async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      await txn.delete('sale_items');
+      await txn.delete('purchase_items');
+      await txn.delete('transactions');
+      await txn.delete('payments');
+      await txn.delete('sales');
+      await txn.delete('purchases');
+      await txn.delete('products');
+      await txn.delete('customers');
+      await txn.delete('suppliers');
+      await txn.delete('recycle_bin');
+    });
+  }
+
+  /// Get counts for all tables (for display)
+  Future<Map<String, int>> getAllDataCounts() async {
+    final db = await instance.database;
+    final products = (await db.rawQuery('SELECT COUNT(*) as c FROM products')).first['c'] as int;
+    final customers = (await db.rawQuery('SELECT COUNT(*) as c FROM customers')).first['c'] as int;
+    final sales = (await db.rawQuery('SELECT COUNT(*) as c FROM sales')).first['c'] as int;
+    final purchases = (await db.rawQuery('SELECT COUNT(*) as c FROM purchases')).first['c'] as int;
+    final suppliers = (await db.rawQuery('SELECT COUNT(*) as c FROM suppliers')).first['c'] as int;
+    final transactions = (await db.rawQuery('SELECT COUNT(*) as c FROM transactions')).first['c'] as int;
+    final payments = (await db.rawQuery('SELECT COUNT(*) as c FROM payments')).first['c'] as int;
+    return {
+      'products': products,
+      'customers': customers,
+      'sales': sales,
+      'purchases': purchases,
+      'suppliers': suppliers,
+      'transactions': transactions,
+      'payments': payments,
+    };
   }
 
   Future close() async {

@@ -131,7 +131,7 @@ class _PurchaseDetailScreenState extends State<PurchaseDetailScreen> {
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('ক্রয় মুছবেন?'),
-        content: const Text('এই ক্রয় মুছলে স্টক পূর্বাবস্থায় ফিরবে।'),
+        content: const Text('এই ক্রয় রিসাইকেল বিন-এ স্থানান্তর করা হবে এবং পণ্য স্টক এডজাস্ট হবে। এডমিন পরবর্তীতে তা পুনঃরুদ্ধার করতে পারবেন।'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
