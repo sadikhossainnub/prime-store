@@ -25,6 +25,8 @@ class BackupService {
   static final _googleSignIn = GoogleSignIn(scopes: [drive.DriveApi.driveFileScope]);
   static const _backupFileName = 'amer_dokan_backup.db';
   static const _lastBackupKey = 'last_backup_time';
+  static const _customBackupDirKey = 'custom_backup_directory';
+  static const _last3DayBackupKey = 'last_local_3day_backup_time';
 
   static Future<GoogleSignInAccount?> signIn() async {
     try {
@@ -56,16 +58,60 @@ class BackupService {
     return p.join(dbPath, 'amer_dokan.db');
   }
 
-  /// Get public Download directory on Android or app docs dir
-  static Future<Directory> getPublicDownloadDir() async {
-    if (Platform.isAndroid) {
-      final dir = Directory('/storage/emulated/0/Download');
-      if (await dir.exists()) return dir;
+  // ─── DYNAMIC CUSTOM BACKUP DIRECTORY ───────────────────────────
+
+  /// Get the active custom backup directory configured by Administrator
+  static Future<Directory> getCustomBackupDir() async {
+    final prefs = await SharedPreferences.getInstance();
+    final customPath = prefs.getString(_customBackupDirKey);
+
+    Directory targetDir;
+    if (customPath != null && customPath.isNotEmpty) {
+      targetDir = Directory(customPath);
+    } else if (Platform.isAndroid) {
+      targetDir = Directory('/storage/emulated/0/AmerDokan_Backups');
+    } else {
+      final docs = await getApplicationDocumentsDirectory();
+      targetDir = Directory(p.join(docs.path, 'AmerDokan_Backups'));
     }
-    return await getApplicationDocumentsDirectory();
+
+    try {
+      if (!await targetDir.exists()) {
+        await targetDir.create(recursive: true);
+      }
+      return targetDir;
+    } catch (_) {
+      final docs = await getApplicationDocumentsDirectory();
+      final fallbackDir = Directory(p.join(docs.path, 'AmerDokan_Backups'));
+      if (!await fallbackDir.exists()) {
+        await fallbackDir.create(recursive: true);
+      }
+      return fallbackDir;
+    }
   }
 
-  /// Export local SQLite database file (.db) to Download folder
+  /// Set and save the Administrator's custom backup directory path
+  static Future<bool> setCustomBackupDir(String path) async {
+    try {
+      final dir = Directory(path);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_customBackupDirKey, path);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Get current custom backup directory path string for display
+  static Future<String> getCustomBackupDirPath() async {
+    final dir = await getCustomBackupDir();
+    return dir.path;
+  }
+
+  /// Export local SQLite database file (.db) to custom configured backup folder
   static Future<String> exportLocalDatabaseBackup() async {
     final dbPath = await _getDbPath();
     final dbFile = File(dbPath);
@@ -75,14 +121,14 @@ class BackupService {
 
     final dateStr = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
     final fileName = 'amerdokan_db_$dateStr.db';
-    final dir = await getPublicDownloadDir();
+    final dir = await getCustomBackupDir();
     final targetPath = p.join(dir.path, fileName);
 
     await dbFile.copy(targetPath);
     return targetPath;
   }
 
-  /// Export full structured Excel backup (.xlsx) to Download folder
+  /// Export full structured Excel backup (.xlsx) to custom configured backup folder
   static Future<String> exportLocalExcelBackup() async {
     final excel = Excel.createExcel();
 
@@ -160,7 +206,7 @@ class BackupService {
 
     final dateStr = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
     final fileName = 'amerdokan_backup_data_$dateStr.xlsx';
-    final dir = await getPublicDownloadDir();
+    final dir = await getCustomBackupDir();
     final targetPath = p.join(dir.path, fileName);
 
     final bytes = excel.encode();
@@ -169,6 +215,120 @@ class BackupService {
       await targetFile.writeAsBytes(bytes);
     }
     return targetPath;
+  }
+
+  /// Perform a local SQLite DB backup into custom configured backup directory
+  static Future<String> performLocalDbBackupToHiddenDir() async {
+    final dbPath = await _getDbPath();
+    final dbFile = File(dbPath);
+    if (!await dbFile.exists()) {
+      throw Exception('ডেটাবেস ফাইল পাওয়া যায়নি');
+    }
+
+    final backupDir = await getCustomBackupDir();
+    final dateStr = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
+    final backupFileName = 'amerdokan_db_auto_$dateStr.db';
+    final targetPath = p.join(backupDir.path, backupFileName);
+
+    await dbFile.copy(targetPath);
+    return targetPath;
+  }
+
+  /// Auto backup every 3 days (72 hours) - DB only to custom backup directory
+  static Future<bool> autoLocalBackupEvery3Days() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastStr = prefs.getString(_last3DayBackupKey);
+
+      if (lastStr != null) {
+        final lastDate = DateTime.tryParse(lastStr);
+        if (lastDate != null && DateTime.now().difference(lastDate).inHours < 72) {
+          return false; // Less than 3 days, skip
+        }
+      }
+
+      // Perform 3-day DB backup
+      final backupPath = await performLocalDbBackupToHiddenDir();
+      await prefs.setString(_last3DayBackupKey, DateTime.now().toIso8601String());
+
+      // Clean up old auto backups (keep last 10)
+      final backupDir = await getCustomBackupDir();
+      final files = backupDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => p.basename(f.path).startsWith('amerdokan_db_auto_'))
+          .toList();
+
+      files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+      if (files.length > 10) {
+        for (int i = 10; i < files.length; i++) {
+          try {
+            await files[i].delete();
+          } catch (_) {}
+        }
+      }
+
+      print('AUTOMATIC_3DAY_BACKUP_CREATED: $backupPath');
+      return true;
+    } catch (e) {
+      print('AUTOMATIC_3DAY_BACKUP_ERROR: $e');
+      return false;
+    }
+  }
+
+  /// List all backups stored in the custom backup directory
+  static Future<List<File>> getHiddenBackupFiles() async {
+    final dir = await getCustomBackupDir();
+    if (!await dir.exists()) return [];
+
+    final list = dir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.db') || f.path.endsWith('.xlsx'))
+        .toList();
+
+    list.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    return list;
+  }
+
+  /// Restore database from a specific file in the custom backup folder
+  static Future<bool> restoreFromHiddenBackupFile(File backupFile) async {
+    return await restoreFromLocalDbFile(backupFile);
+  }
+
+  /// Restore database from any local .db file selected by user
+  static Future<bool> restoreFromLocalDbFile(File dbFile) async {
+    try {
+      if (!await dbFile.exists()) return false;
+
+      // 1. Close active DB connection
+      await DatabaseHelper.instance.closeDatabase();
+
+      // 2. Overwrite amer_dokan.db
+      final dbPath = await _getDbPath();
+      final targetFile = File(dbPath);
+      await dbFile.copy(targetFile.path);
+
+      // 3. Delete any leftover WAL / journal files
+      final journalFile = File('$dbPath-journal');
+      if (await journalFile.exists()) await journalFile.delete();
+      final walFile = File('$dbPath-wal');
+      if (await walFile.exists()) await walFile.delete();
+      final shmFile = File('$dbPath-shm');
+      if (await shmFile.exists()) await shmFile.delete();
+
+      // 4. Open restored DB to ensure version pragma matches version 6
+      final restoredDb = await openDatabase(dbPath);
+      await restoredDb.execute('PRAGMA user_version = 6;');
+      await restoredDb.close();
+
+      // 5. Reload DatabaseHelper singleton connection
+      await DatabaseHelper.instance.reloadDatabase();
+      return true;
+    } catch (e) {
+      print('RESTORE_LOCAL_DB_ERROR: $e');
+      return false;
+    }
   }
 
   /// Manual backup to Google Drive
@@ -267,132 +427,6 @@ class BackupService {
   static Future<bool> isAutoBackupEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('auto_backup') ?? false;
-  }
-
-  // ─── DEDICATED HIDDEN LOCAL BACKUP DIRECTORY & 3-DAY AUTO BACKUP ─────
-  static const _last3DayBackupKey = 'last_local_3day_backup_time';
-
-  /// Get or create dedicated hidden directory for app backups (.amerdokan_backups)
-  static Future<Directory> getHiddenBackupDir() async {
-    Directory targetDir;
-    if (Platform.isAndroid) {
-      targetDir = Directory('/storage/emulated/0/.amerdokan_backups');
-      try {
-        if (!await targetDir.exists()) {
-          await targetDir.create(recursive: true);
-        }
-        final nomedia = File(p.join(targetDir.path, '.nomedia'));
-        if (!await nomedia.exists()) {
-          await nomedia.create();
-        }
-        return targetDir;
-      } catch (_) {
-        final docs = await getApplicationDocumentsDirectory();
-        targetDir = Directory(p.join(docs.path, '.amerdokan_backups'));
-      }
-    } else {
-      final docs = await getApplicationDocumentsDirectory();
-      targetDir = Directory(p.join(docs.path, '.amerdokan_backups'));
-    }
-
-    if (!await targetDir.exists()) {
-      await targetDir.create(recursive: true);
-    }
-    return targetDir;
-  }
-
-  /// Perform a local SQLite DB backup into the dedicated hidden directory
-  static Future<String> performLocalDbBackupToHiddenDir() async {
-    final dbPath = await _getDbPath();
-    final dbFile = File(dbPath);
-    if (!await dbFile.exists()) {
-      throw Exception('ডেটাবেস ফাইল পাওয়া যায়নি');
-    }
-
-    final hiddenDir = await getHiddenBackupDir();
-    final dateStr = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
-    final backupFileName = 'amerdokan_db_auto_$dateStr.db';
-    final targetPath = p.join(hiddenDir.path, backupFileName);
-
-    await dbFile.copy(targetPath);
-    return targetPath;
-  }
-
-  /// Auto backup every 3 days (72 hours) - DB only to hidden app backup directory
-  static Future<bool> autoLocalBackupEvery3Days() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastStr = prefs.getString(_last3DayBackupKey);
-
-      if (lastStr != null) {
-        final lastDate = DateTime.tryParse(lastStr);
-        if (lastDate != null && DateTime.now().difference(lastDate).inHours < 72) {
-          return false; // Less than 3 days, skip
-        }
-      }
-
-      // Perform 3-day DB backup
-      final backupPath = await performLocalDbBackupToHiddenDir();
-      await prefs.setString(_last3DayBackupKey, DateTime.now().toIso8601String());
-
-      // Clean up old auto backups (keep last 10)
-      final hiddenDir = await getHiddenBackupDir();
-      final files = hiddenDir
-          .listSync()
-          .whereType<File>()
-          .where((f) => p.basename(f.path).startsWith('amerdokan_db_auto_'))
-          .toList();
-
-      files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
-      if (files.length > 10) {
-        for (int i = 10; i < files.length; i++) {
-          try {
-            await files[i].delete();
-          } catch (_) {}
-        }
-      }
-
-      print('AUTOMATIC_3DAY_BACKUP_CREATED: $backupPath');
-      return true;
-    } catch (e) {
-      print('AUTOMATIC_3DAY_BACKUP_ERROR: $e');
-      return false;
-    }
-  }
-
-  /// List all backups stored in the hidden dedicated directory
-  static Future<List<File>> getHiddenBackupFiles() async {
-    final dir = await getHiddenBackupDir();
-    if (!await dir.exists()) return [];
-
-    final list = dir
-        .listSync()
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.db') || f.path.endsWith('.xlsx'))
-        .toList();
-
-    list.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
-    return list;
-  }
-
-  /// Restore database from a specific file in the hidden backup folder
-  static Future<bool> restoreFromHiddenBackupFile(File backupFile) async {
-    if (!await backupFile.exists()) return false;
-    final dbPath = await _getDbPath();
-    await backupFile.copy(dbPath);
-    return true;
-  }
-
-  /// Restore database from any local .db file selected by user
-  static Future<bool> restoreFromLocalDbFile(File dbFile) async {
-    try {
-      if (!await dbFile.exists()) return false;
-      final dbPath = await _getDbPath();
-      await dbFile.copy(dbPath);
-      return true;
-    } catch (_) {
-      return false;
-    }
   }
 
   static Future<String?> getLast3DayBackupTime() async {

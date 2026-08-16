@@ -16,7 +16,24 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null && _database!.isOpen) return _database!;
+    _database = await _initDB('amer_dokan.db');
+    return _database!;
+  }
+
+  Future<void> closeDatabase() async {
+    if (_database != null) {
+      try {
+        if (_database!.isOpen) {
+          await _database!.close();
+        }
+      } catch (_) {}
+      _database = null;
+    }
+  }
+
+  Future<Database> reloadDatabase() async {
+    await closeDatabase();
     _database = await _initDB('amer_dokan.db');
     return _database!;
   }

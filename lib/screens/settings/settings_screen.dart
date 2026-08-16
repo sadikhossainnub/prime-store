@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/dashboard_provider.dart';
+import '../../providers/customer_provider.dart';
 import '../../services/backup_service.dart';
 import '../../services/license_service.dart';
 import '../../services/admin_auth_service.dart';
@@ -33,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isRestoring = false;
   String _shopName = '';
   String _ownerName = '';
+  String _customBackupPath = '';
   String? _deviceId;
   int _daysRemaining = 0;
   DateTime? _expiryDate;
@@ -48,12 +50,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final last = await BackupService.getLastBackupTime();
     final account = await BackupService.currentUser;
     final prefs = await SharedPreferences.getInstance();
+    final customPath = await BackupService.getCustomBackupDirPath();
     setState(() {
       _autoBackup = auto;
       _lastBackup = last;
       _driveEmail = account?.email;
       _shopName = prefs.getString('shop_name') ?? '';
       _ownerName = prefs.getString('owner_name') ?? '';
+      _customBackupPath = customPath;
     });
     _loadLicenseInfo();
   }
@@ -202,6 +206,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ));
   }
 
+  Future<void> _changeBackupDirectory() async {
+    final verified = await AdminAuthService.verifyAdmin(context);
+    if (!verified || !mounted) return;
+
+    try {
+      final selectedDirectory = await FilePicker.platform.getDirectoryPath();
+      if (selectedDirectory == null || selectedDirectory.isEmpty) return;
+
+      final success = await BackupService.setCustomBackupDir(selectedDirectory);
+      if (mounted && success) {
+        setState(() {
+          _customBackupPath = selectedDirectory;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ নতুন ব্যাকআপ ডিরেক্টরি সেট হয়েছে:\n$selectedDirectory'),
+            backgroundColor: AppColors.primary,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('পাথ সেট করতে সমস্যা হয়েছে: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
   Future<void> _exportLocalExcelBackup() async {
     final verified = await AdminAuthService.verifyAdmin(context);
     if (!verified || !mounted) return;
@@ -270,9 +304,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       if (success) {
         context.read<DashboardProvider>().fetchStats();
+        context.read<CustomerProvider>().fetchCustomers();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✓ SQLite .db ফাইল থেকে রিস্টোর সম্পন্ন হয়েছে! অ্যাপটি রিস্টার্ট করুন।'),
+            content: Text('✓ SQLite .db ফাইল থেকে ডেটা রিস্টোর সম্পন্ন হয়েছে!'),
             backgroundColor: AppColors.primary,
             duration: Duration(seconds: 5),
           ),
@@ -510,6 +545,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
               opacity: 0.05,
               child: Column(
                 children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.folder_open_rounded, color: Colors.purpleAccent, size: 22),
+                    ),
+                    title: const Text('ব্যাকআপ ফোল্ডার লোকেশন সেট করুন'),
+                    subtitle: Text(
+                      _customBackupPath.isNotEmpty ? _customBackupPath : 'ফোল্ডার নির্ধারণ করতে ট্যাপ করুন',
+                      style: const TextStyle(fontSize: 11, color: Colors.white54),
+                    ),
+                    trailing: const Icon(Icons.edit, color: AppColors.primary, size: 20),
+                    onTap: _changeBackupDirectory,
+                  ),
+                  const Divider(color: Colors.white12),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Container(
